@@ -314,7 +314,7 @@ export default function Home() {
                 <li className="flex gap-2">✓ Standard AI processing</li>
               </ul>
               <button
-                onClick={() => handleCheckout("prod_VO2yGNsiXl1XS1", "payment", "24h")}
+                onClick={() => handleCheckout("price_1UNGsAQ4pIBaDs86VjTn5jDO", "payment", "24h")}
                 disabled={checkoutLoading}
                 className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
@@ -333,7 +333,7 @@ export default function Home() {
                 <li className="flex gap-2">✓ Priority AI processing</li>
               </ul>
               <button
-                onClick={() => handleCheckout("prod_VO2y4Bg9yNR3iZ", "subscription", "monthly")}
+                onClick={() => handleCheckout("price_1UNGsgQ4pIBaDs86SZaGbbe9", "subscription", "monthly")}
                 disabled={checkoutLoading}
                 className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
@@ -355,7 +355,7 @@ export default function Home() {
                 <li className="flex gap-2">✓ Early access to new features</li>
               </ul>
               <button
-                onClick={() => handleCheckout("prod_VOIC4tCAWMsbxY", "payment", "lifetime")}
+                onClick={() => handleCheckout("price_1UNVc1Q4pIBaDs86Vo0F2fhs", "payment", "lifetime")}
                 disabled={checkoutLoading}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow transition disabled:opacity-50"
               >
