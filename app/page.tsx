@@ -195,8 +195,16 @@ export default function Home() {
 
         {/* Timer Banner */}
         {isPro && (
-          <div className="inline-block mt-2 bg-emerald-100 text-emerald-800 text-sm font-bold px-4 py-2 rounded-full shadow-sm">
-            ✓ Pro Active {expiry === -1 ? "(Lifetime Access)" : `- ${timeLeft}`}
+          <div className="mt-2 flex justify-center">
+            {expiry === -1 ? (
+              <div className="inline-block bg-gradient-to-r from-amber-200 to-yellow-400 text-yellow-900 text-sm font-extrabold px-6 py-2 rounded-full shadow-md border border-yellow-300 animate-in fade-in zoom-in duration-500">
+                👑 Lifetime Founding Member
+              </div>
+            ) : (
+              <div className="inline-block bg-emerald-100 text-emerald-800 text-sm font-bold px-5 py-2 rounded-full shadow-sm border border-emerald-200 animate-in fade-in zoom-in duration-500">
+                ✓ Pro Active - {timeLeft}
+              </div>
+            )}
           </div>
         )}
 
