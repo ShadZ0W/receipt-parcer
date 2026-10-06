@@ -10,26 +10,61 @@ export default function Home() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // Paywall states
   const [usageCount, setUsageCount] = useState(0);
   const [isPro, setIsPro] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  
+  // New Timer States
+  const [expiry, setExpiry] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>("");
 
-  // Initialize usage and check for Stripe success redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") === "true") {
-      localStorage.setItem("isPro", "true");
-      // Clean up the URL
+      const plan = params.get("plan");
+      let expiryTime = null;
+
+      if (plan === "24h") expiryTime = Date.now() + (24 * 60 * 60 * 1000);
+      if (plan === "monthly") expiryTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      if (plan === "lifetime") expiryTime = -1; // -1 represents lifetime
+
+      if (expiryTime) localStorage.setItem("proExpiry", expiryTime.toString());
       window.history.replaceState(null, "", "/");
     }
 
-    const storedPro = localStorage.getItem("isPro") === "true";
-    const storedCount = parseInt(localStorage.getItem("usageCount") || "0", 10);
-    
-    setIsPro(storedPro);
-    setUsageCount(storedCount);
+    const storedExpiry = localStorage.getItem("proExpiry");
+    if (storedExpiry) {
+      setExpiry(parseInt(storedExpiry, 10));
+      setIsPro(true);
+    } else {
+      // Fallback for older testing
+      setIsPro(localStorage.getItem("isPro") === "true");
+    }
+    setUsageCount(parseInt(localStorage.getItem("usageCount") || "0", 10));
   }, []);
+
+  // Countdown logic
+  useEffect(() => {
+    if (!expiry || expiry === -1) return;
+
+    const interval = setInterval(() => {
+      const difference = expiry - Date.now();
+
+      if (difference <= 0) {
+        setIsPro(false);
+        localStorage.removeItem("proExpiry");
+        setTimeLeft("Expired");
+        clearInterval(interval);
+      } else {
+        const d = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const h = Math.floor((difference / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((difference / 1000 / 60) % 60);
+        setTimeLeft(d > 0 ? `${d}d ${h}h remaining` : `${h}h ${m}m remaining`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiry]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,13 +113,17 @@ export default function Home() {
     }
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (priceId: string, mode: string, plan: string) => {
     setCheckoutLoading(true);
     try {
-      const res = await fetch("/api/checkout", { method: "POST" });
+      const res = await fetch("/api/checkout", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId, mode, plan }) // Passes the plan to the backend
+      });
       const { url, error } = await res.json();
       if (error) throw new Error(error);
-      if (url) window.location.href = url; // Redirect to Stripe
+      if (url) window.location.href = url; 
     } catch (err) {
       setError("Failed to load checkout. Please try again.");
       setCheckoutLoading(false);
@@ -129,6 +168,13 @@ export default function Home() {
           Drop your PDF or photo, preview the extraction, and export cleanly to a spreadsheet.
         </p>
 
+        {/* Timer Banner */}
+        {isPro && (
+          <div className="inline-block mt-2 bg-emerald-100 text-emerald-800 text-sm font-bold px-4 py-2 rounded-full shadow-sm">
+            ✓ Pro Active {expiry === -1 ? "(Lifetime Access)" : `- ${timeLeft}`}
+          </div>
+        )}
+
         {!isPro && (
           <p className="text-sm font-medium text-slate-500">
             Free scans remaining: {Math.max(0, FREE_LIMIT - usageCount)} / {FREE_LIMIT}
@@ -146,7 +192,7 @@ export default function Home() {
             <h3 className="text-2xl font-bold text-slate-800 mb-2">You've reached your free limit</h3>
             <p className="text-slate-600 mb-6">Upgrade to Pro for unlimited exports and priority processing.</p>
             <button
-              onClick={handleCheckout}
+              onClick={() => handleCheckout("prod_VO2y4Bg9yNR3iZ", "subscription", "monthly")}
               disabled={checkoutLoading}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow transition disabled:opacity-50"
             >
@@ -177,7 +223,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Extracted Data Table (Same as before) */}
+        {/* Extracted Data Table */}
         {data && (
           <div className="mt-8 bg-white border border-slate-200 rounded-xl p-6 text-left shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center border-b pb-4 mb-4">
@@ -216,6 +262,77 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Pricing Section */}
+      {!isPro && (
+        <div className="mt-20 w-full pt-16 border-t border-slate-200">
+          <h2 className="text-3xl font-bold text-slate-900 mb-8 text-center">Upgrade to Pro</h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto px-4">
+            
+            {/* 24-Hour Pass */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition flex flex-col">
+              <h3 className="text-xl font-bold text-slate-800">24-Hour Pass</h3>
+              <p className="text-slate-500 mt-2 mb-6">Perfect for processing a quick batch of expense reports.</p>
+              <div className="text-4xl font-extrabold text-slate-900 mb-6">$4.99<span className="text-lg text-slate-500 font-medium">/once</span></div>
+              <ul className="space-y-3 mb-8 flex-1 text-slate-700">
+                <li className="flex gap-2">✓ 24 hours of unlimited scans</li>
+                <li className="flex gap-2">✓ Excel (.xlsx) exports</li>
+                <li className="flex gap-2">✓ Standard AI processing</li>
+              </ul>
+              <button
+                onClick={() => handleCheckout("prod_VO2yGNsiXl1XS1", "payment", "24h")}
+                disabled={checkoutLoading}
+                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {checkoutLoading ? "Redirecting..." : "Get 24-Hour Pass"}
+              </button>
+            </div>
+
+            {/* Monthly Plan */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition flex flex-col relative">
+              <h3 className="text-xl font-bold text-slate-800">Pro Subscription</h3>
+              <p className="text-slate-500 mt-2 mb-6">Ideal for freelancers and professionals needing ongoing access.</p>
+              <div className="text-4xl font-extrabold text-slate-900 mb-6">$9.99<span className="text-lg text-slate-500 font-medium">/mo</span></div>
+              <ul className="space-y-3 mb-8 flex-1 text-slate-700">
+                <li className="flex gap-2">✓ Unlimited receipt scans</li>
+                <li className="flex gap-2">✓ Excel (.xlsx) exports</li>
+                <li className="flex gap-2">✓ Priority AI processing</li>
+              </ul>
+              <button
+                onClick={() => handleCheckout("prod_VO2y4Bg9yNR3iZ", "subscription", "monthly")}
+                disabled={checkoutLoading}
+                className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {checkoutLoading ? "Redirecting..." : "Get Monthly"}
+              </button>
+            </div>
+
+            {/* Lifetime / Annual Plan */}
+            <div className="bg-blue-50 border-2 border-blue-500 rounded-2xl p-8 shadow-sm hover:shadow-md transition flex flex-col relative">
+              <div className="absolute top-0 right-8 -translate-y-1/2 bg-blue-500 text-white text-xs font-bold uppercase tracking-wider py-1 px-3 rounded-full">
+                Best Value
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Lifetime Pass</h3>
+              <p className="text-slate-500 mt-2 mb-6">Pay once, convert receipts forever. No recurring subscriptions.</p>
+              <div className="text-4xl font-extrabold text-slate-900 mb-6">$49.99<span className="text-lg text-slate-500 font-medium">/once</span></div>
+              <ul className="space-y-3 mb-8 flex-1 text-slate-700">
+                <li className="flex gap-2 font-medium">✓ Everything in Pro</li>
+                <li className="flex gap-2">✓ Pay once, never again</li>
+                <li className="flex gap-2">✓ Early access to new features</li>
+              </ul>
+              <button
+                onClick={() => handleCheckout("prod_VOIC4tCAWMsbxY", "payment", "lifetime")}
+                disabled={checkoutLoading}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow transition disabled:opacity-50"
+              >
+                {checkoutLoading ? "Redirecting..." : "Get Lifetime"}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </main>
   );
 }
