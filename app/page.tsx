@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 const FREE_LIMIT = 3;
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false); // Prevents Next.js hydration errors
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
@@ -21,20 +22,21 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<string>("");
 
   useEffect(() => {
+    setMounted(true); // Tells React it is safe to render dynamic client-side elements
     const params = new URLSearchParams(window.location.search);
+    
     if (params.get("success") === "true") {
       const plan = params.get("plan");
       let expiryTime = null;
 
       if (plan === "24h") expiryTime = Date.now() + (24 * 60 * 60 * 1000);
       else if (plan === "monthly") expiryTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
-      else if (plan === "lifetime") expiryTime = -1; // -1 represents lifetime
+      else if (plan === "lifetime") expiryTime = -1; 
 
-      if (expiryTime) {
-        localStorage.setItem("proExpiry", expiryTime.toString());
-      }
-      
-      // CRITICAL: Always lock in Pro status regardless of the timer
+      // Fallback: If URL dropped the plan name, default to monthly so the UI doesn't break
+      if (!expiryTime) expiryTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+      localStorage.setItem("proExpiry", expiryTime.toString());
       localStorage.setItem("isPro", "true"); 
       window.history.replaceState(null, "", "/");
     }
@@ -49,7 +51,6 @@ export default function Home() {
     setUsageCount(parseInt(localStorage.getItem("usageCount") || "0", 10));
   }, []);
 
-  // Countdown logic
   useEffect(() => {
     if (!expiry || expiry === -1) return;
 
@@ -100,7 +101,6 @@ export default function Home() {
     form.append("file", file);
 
     try {
-      // Fake progress interval to keep the user engaged while waiting for AI
       const progressInterval = setInterval(() => {
         setProgress((prev) => (prev >= 85 ? 85 : prev + 15));
         setProgressText("AI is extracting line items & taxes...");
@@ -111,7 +111,6 @@ export default function Home() {
       
       const result = await res.json();
 
-      // Strict failure check: Do not charge a scan if the AI failed to read it
       if (!res.ok || !result.items || result.items.length === 0) {
         throw new Error(result.error || "Failed to extract receipt data. Your free attempt was not used.");
       }
@@ -129,18 +128,19 @@ export default function Home() {
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
-      setTimeout(() => setLoading(false), 800); // Allow 100% to show briefly
+      setTimeout(() => setLoading(false), 800); 
       e.target.value = ""; 
     }
   };
 
   const handleCheckout = async (priceId: string, mode: string, plan: string) => {
     setCheckoutLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/checkout", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId, mode, plan }) // Passes the plan to the backend
+        body: JSON.stringify({ priceId, mode, plan }) 
       });
       const { url, error } = await res.json();
       if (error) throw new Error(error);
@@ -160,7 +160,6 @@ export default function Home() {
       ["Date", data.date || "N/A"],
       ["Invoice #", data.invoice_number || "N/A"],
       [], 
-      // Added a Category column so users can easily tag expenses for tax software
       ["Item Description", "Category", "Quantity", "Unit Price", "Total Amount"]
     ];
 
@@ -168,14 +167,12 @@ export default function Home() {
       exportData.push([it.description, "", it.qty || 1, it.unit_price || "", it.amount || ""]);
     });
 
-    // Append strict financial totals at the bottom
     exportData.push([]);
     exportData.push(["", "", "", "Subtotal:", `${data.currency || "$"}${data.subtotal || "0.00"}`]);
     exportData.push(["", "", "", "Tax / GST:", `${data.currency || "$"}${data.tax || "0.00"}`]);
     exportData.push(["", "", "", "Grand Total:", `${data.currency || "$"}${data.total || "0.00"}`]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-    // Adjusted column widths to accommodate the new Category column
     worksheet["!cols"] = [{ wch: 45 }, { wch: 18 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
 
     const workbook = XLSX.utils.book_new();
@@ -197,22 +194,22 @@ export default function Home() {
           Drop your PDF or photo, preview the extraction, and export cleanly to a spreadsheet.
         </p>
 
-        {/* Timer Banner */}
-        {isPro && (
-          <div className="mt-2 flex justify-center">
+        {/* Timer Banner - Now wrapped in 'mounted' to fix hydration issues */}
+        {mounted && isPro && (
+          <div className="mt-4 flex justify-center w-full">
             {expiry === -1 ? (
-              <div className="inline-block bg-gradient-to-r from-amber-200 to-yellow-400 text-yellow-900 text-sm font-extrabold px-6 py-2 rounded-full shadow-md border border-yellow-300 animate-in fade-in zoom-in duration-500">
+              <div className="bg-gradient-to-r from-amber-200 to-yellow-400 text-yellow-900 text-base font-extrabold px-8 py-3 rounded-full shadow-md border border-yellow-300">
                 👑 Lifetime Founding Member
               </div>
             ) : (
-              <div className="inline-block bg-emerald-100 text-emerald-800 text-sm font-bold px-5 py-2 rounded-full shadow-sm border border-emerald-200 animate-in fade-in zoom-in duration-500">
-                ✓ Pro Active {timeLeft ? `- ${timeLeft}` : ""}
+              <div className="bg-emerald-100 text-emerald-800 text-base font-bold px-8 py-3 rounded-full shadow-sm border border-emerald-300">
+                ✓ Pro Active {timeLeft ? `| ${timeLeft}` : ""}
               </div>
             )}
           </div>
         )}
 
-        {!isPro && (
+        {mounted && !isPro && (
           <p className="text-sm font-medium text-slate-500">
             Free scans remaining: {Math.max(0, FREE_LIMIT - usageCount)} / {FREE_LIMIT}
           </p>
@@ -229,7 +226,7 @@ export default function Home() {
             <h3 className="text-2xl font-bold text-slate-800 mb-2">You've reached your free limit</h3>
             <p className="text-slate-600 mb-6">Upgrade to Pro for unlimited exports and priority processing.</p>
             <button
-              onClick={() => handleCheckout("prod_VO2y4Bg9yNR3iZ", "subscription", "monthly")}
+              onClick={() => handleCheckout("price_1UNGsgQ4pIBaDs86SZaGbbe9", "subscription", "monthly")}
               disabled={checkoutLoading}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow transition disabled:opacity-50"
             >
@@ -270,7 +267,7 @@ export default function Home() {
 
         {/* Extracted Data Table */}
         {data && (
-          <div className="mt-8 bg-white border border-slate-200 rounded-xl p-6 text-left shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="mt-8 bg-white border border-slate-200 rounded-xl p-6 text-left shadow-sm">
             <div className="flex justify-between items-center border-b pb-4 mb-4">
               <div>
                 <h3 className="font-bold text-lg text-slate-800">{data.vendor || "Unknown Vendor"}</h3>
@@ -309,7 +306,7 @@ export default function Home() {
       </div>
 
       {/* Pricing Section */}
-      {!isPro && (
+      {mounted && !isPro && (
         <div className="mt-20 w-full pt-16 border-t border-slate-200">
           <h2 className="text-3xl font-bold text-slate-900 mb-8 text-center">Upgrade to Pro</h2>
           
