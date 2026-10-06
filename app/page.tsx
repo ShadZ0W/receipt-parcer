@@ -7,6 +7,8 @@ const FREE_LIMIT = 3;
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState("");
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -81,24 +83,39 @@ export default function Home() {
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError("File is too large. Please keep uploads under 5MB.");
+      setError("File is too large. Keep uploads under 5MB.");
       e.target.value = "";
       return;
     }
 
     setLoading(true);
+    setProgress(20);
+    setProgressText("Uploading document...");
+    
     const form = new FormData();
     form.append("file", file);
 
     try {
+      // Fake progress interval to keep the user engaged while waiting for AI
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => (prev >= 85 ? 85 : prev + 15));
+        setProgressText("AI is extracting line items & taxes...");
+      }, 800);
+
       const res = await fetch("/api/parse", { method: "POST", body: form });
+      clearInterval(progressInterval);
+      
       const result = await res.json();
 
-      if (!res.ok) throw new Error(result.error || "Failed to process receipt");
+      // Strict failure check: Do not charge a scan if the AI failed to read it
+      if (!res.ok || !result.items || result.items.length === 0) {
+        throw new Error(result.error || "Failed to extract receipt data. Your free attempt was not used.");
+      }
 
+      setProgress(100);
+      setProgressText("Formatting spreadsheet...");
       setData(result);
 
-      // Increment usage if they are on the free tier
       if (!isPro) {
         const newCount = usageCount + 1;
         setUsageCount(newCount);
@@ -108,7 +125,7 @@ export default function Home() {
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 800); // Allow 100% to show briefly
       e.target.value = ""; 
     }
   };
@@ -132,22 +149,30 @@ export default function Home() {
 
   const downloadExcel = () => {
     if (!data?.items) return;
+    
     const exportData = [
       ["Receipt Summary", ""],
       ["Vendor", data.vendor || "Unknown Vendor"],
       ["Date", data.date || "N/A"],
       ["Invoice #", data.invoice_number || "N/A"],
-      ["Total", `${data.currency || "$"}${data.total || "0.00"}`],
       [], 
-      ["Item Description", "Quantity", "Unit Price", "Total Amount"]
+      // Added a Category column so users can easily tag expenses for tax software
+      ["Item Description", "Category", "Quantity", "Unit Price", "Total Amount"]
     ];
 
     data.items.forEach((it: any) => {
-      exportData.push([it.description, it.qty || 1, it.unit_price || "", it.amount || ""]);
+      exportData.push([it.description, "", it.qty || 1, it.unit_price || "", it.amount || ""]);
     });
 
+    // Append strict financial totals at the bottom
+    exportData.push([]);
+    exportData.push(["", "", "", "Subtotal:", `${data.currency || "$"}${data.subtotal || "0.00"}`]);
+    exportData.push(["", "", "", "Tax / GST:", `${data.currency || "$"}${data.tax || "0.00"}`]);
+    exportData.push(["", "", "", "Grand Total:", `${data.currency || "$"}${data.total || "0.00"}`]);
+
     const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-    worksheet["!cols"] = [{ wch: 45 }, { wch: 12 }, { wch: 15 }, { wch: 15 }];
+    // Adjusted column widths to accommodate the new Category column
+    worksheet["!cols"] = [{ wch: 45 }, { wch: 18 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Expenses");
@@ -208,9 +233,17 @@ export default function Home() {
               disabled={loading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
             />
-            <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+            <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none w-full">
               {loading ? (
-                <p className="text-blue-600 font-medium animate-pulse">Extracting line items with AI...</p>
+                <div className="w-full max-w-xs mx-auto text-center space-y-4">
+                  <p className="text-blue-600 font-medium animate-pulse">{progressText}</p>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div 
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out" 
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+                </div>
               ) : (
                 <>
                   <p className="text-slate-700 font-semibold group-hover:text-blue-600 transition">
