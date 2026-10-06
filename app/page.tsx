@@ -27,10 +27,15 @@ export default function Home() {
       let expiryTime = null;
 
       if (plan === "24h") expiryTime = Date.now() + (24 * 60 * 60 * 1000);
-      if (plan === "monthly") expiryTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
-      if (plan === "lifetime") expiryTime = -1; // -1 represents lifetime
+      else if (plan === "monthly") expiryTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      else if (plan === "lifetime") expiryTime = -1; // -1 represents lifetime
 
-      if (expiryTime) localStorage.setItem("proExpiry", expiryTime.toString());
+      if (expiryTime) {
+        localStorage.setItem("proExpiry", expiryTime.toString());
+      }
+      
+      // CRITICAL: Always lock in Pro status regardless of the timer
+      localStorage.setItem("isPro", "true"); 
       window.history.replaceState(null, "", "/");
     }
 
@@ -39,7 +44,6 @@ export default function Home() {
       setExpiry(parseInt(storedExpiry, 10));
       setIsPro(true);
     } else {
-      // Fallback for older testing
       setIsPro(localStorage.getItem("isPro") === "true");
     }
     setUsageCount(parseInt(localStorage.getItem("usageCount") || "0", 10));
@@ -202,7 +206,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="inline-block bg-emerald-100 text-emerald-800 text-sm font-bold px-5 py-2 rounded-full shadow-sm border border-emerald-200 animate-in fade-in zoom-in duration-500">
-                ✓ Pro Active - {timeLeft}
+                ✓ Pro Active {timeLeft ? `- ${timeLeft}` : ""}
               </div>
             )}
           </div>
