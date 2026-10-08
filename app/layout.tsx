@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Receipt to Excel | AI Converter",
   description: "Turn invoices and receipts into Excel spreadsheets in seconds.",
+  other: {
+    "google-site-verification": "HSlZE57nAQLyVcFJ2ldyAGDEarFo2Z_ZS3fen_LDC5U",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
